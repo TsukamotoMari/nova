@@ -4,8 +4,7 @@ import { clickPower, coreMultiplier } from './game/engine'
 import { formatDuration, formatNumber, formatRate } from './game/numbers'
 import { useAppUpdate } from './hooks/useAppUpdate'
 import { useGame } from './hooks/useGame'
-
-const nebula = `url("${import.meta.env.BASE_URL}space-bg.jpg")`
+import nebula from '../public/space-bg.jpg'
 
 export default function App() {
   const game = useGame()
@@ -14,7 +13,9 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="starfield" style={{ ['--nebula' as string]: nebula }} aria-hidden="true" />
+      <div className="starfield" aria-hidden="true">
+        <img src={nebula} alt="" />
+      </div>
       <div className="vignette" aria-hidden="true" />
 
       {appUpdate.update ? (

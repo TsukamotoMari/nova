@@ -17,7 +17,6 @@
   --radius-sm: 8px;
   --font: 'IBM Plex Sans', system-ui, sans-serif;
   --display: 'Exo 2', system-ui, sans-serif;
-  --nebula: none;
 }
 
 * {
@@ -76,14 +75,24 @@ p {
   pointer-events: none;
   position: fixed;
   inset: 0;
-  background-color: var(--void);
-  background-image:
-    linear-gradient(180deg, rgba(8, 6, 16, 0.22), rgba(6, 4, 14, 0.38)),
-    var(--nebula);
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
+  overflow: hidden;
+  background: var(--void);
+}
+
+.starfield img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   image-rendering: pixelated;
+}
+
+.starfield::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(8, 6, 16, 0.22), rgba(6, 4, 14, 0.38));
 }
 
 .vignette {
