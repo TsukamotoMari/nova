@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile } from 'node:fs/promises'
+import { chmod, cp, mkdir, readFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -21,6 +21,9 @@ const env = {
 }
 
 const gradlew = process.platform === 'win32' ? '.\\gradlew.bat' : './gradlew'
+if (process.platform !== 'win32') {
+  await chmod(path.join(androidDir, 'gradlew'), 0o755)
+}
 
 await new Promise((resolve, reject) => {
   const child = spawn(gradlew, ['assembleDebug'], {
