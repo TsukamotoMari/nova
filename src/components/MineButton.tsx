@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { formatNumber } from '../game/numbers'
 import { AsteroidArt } from './AsteroidArt'
+
+const TAP_SLOP = 16
 
 interface MineButtonProps {
   onStrike: () => { gained: number; crit: boolean }
@@ -20,6 +22,7 @@ let chipSeq = 0
 export function MineButton({ onStrike, strikePower }: MineButtonProps) {
   const [struck, setStruck] = useState(false)
   const [chips, setChips] = useState<Chip[]>([])
+  const pointerStart = useRef<{ id: number; x: number; y: number } | null>(null)
 
   function strikeAt(target: HTMLButtonElement, clientX: number, clientY: number) {
     const result = onStrike()
@@ -44,8 +47,21 @@ export function MineButton({ onStrike, strikePower }: MineButtonProps) {
 
   function handlePointerDown(event: React.PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0) return
-    event.preventDefault()
+    pointerStart.current = { id: event.pointerId, x: event.clientX, y: event.clientY }
+  }
+
+  function handlePointerUp(event: React.PointerEvent<HTMLButtonElement>) {
+    const start = pointerStart.current
+    pointerStart.current = null
+    if (!start || start.id !== event.pointerId) return
+    const dx = event.clientX - start.x
+    const dy = event.clientY - start.y
+    if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) return
     strikeAt(event.currentTarget, event.clientX, event.clientY)
+  }
+
+  function handlePointerCancel() {
+    pointerStart.current = null
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
@@ -62,6 +78,8 @@ export function MineButton({ onStrike, strikePower }: MineButtonProps) {
         type="button"
         className={`asteroid ${struck ? 'is-struck' : ''}`}
         onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onKeyDown={handleKeyDown}
         aria-label="Mine the asteroid"
       >

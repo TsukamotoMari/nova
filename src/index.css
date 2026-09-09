@@ -237,6 +237,7 @@ p {
   display: grid;
   place-items: center;
   min-height: 460px;
+  touch-action: pan-y;
 }
 
 .mine-glow {
@@ -256,6 +257,7 @@ p {
   padding: 0;
   background: transparent;
   isolation: isolate;
+  touch-action: pan-y;
 }
 
 .asteroid-art,
@@ -672,6 +674,19 @@ dd {
 }
 
 @media (max-width: 860px) {
+  html {
+    touch-action: pan-y;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .hud {
     grid-template-columns: 1fr;
     text-align: center;
@@ -689,6 +704,11 @@ dd {
 
   .mine-stage {
     min-height: 360px;
+  }
+
+  .shop {
+    overflow: visible;
+    min-height: 0;
   }
 
   .shop-tab {
