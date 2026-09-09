@@ -4,6 +4,7 @@ import { clickPower, coreMultiplier } from './game/engine'
 import { formatDuration, formatNumber, formatRate } from './game/numbers'
 import { useAppUpdate } from './hooks/useAppUpdate'
 import { useGame } from './hooks/useGame'
+import { openSite } from './plugins/siteLink'
 import nebula from '../public/space-bg.jpg'
 
 export default function App() {
@@ -17,6 +18,15 @@ export default function App() {
         <img src={nebula} alt="" />
       </div>
       <div className="vignette" aria-hidden="true" />
+
+      <button
+        type="button"
+        className="site-link"
+        onClick={() => void openSite()}
+        aria-label="Open Mari's Indie Games"
+      >
+        site
+      </button>
 
       {appUpdate.update ? (
         <div className="update-banner">
