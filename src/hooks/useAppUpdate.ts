@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import UpdateInstaller from '../plugins/updateInstaller'
 
 export interface RemoteVersion {
   version: string
@@ -13,6 +14,8 @@ const REPO = import.meta.env.VITE_GITHUB_REPO ?? ''
 
 export function useAppUpdate() {
   const [update, setUpdate] = useState<RemoteVersion | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !REPO) return
@@ -38,12 +41,28 @@ export function useAppUpdate() {
     return () => ctrl.abort()
   }, [])
 
+  const install = useCallback(async () => {
+    if (!update?.apkUrl || busy) return
+    setBusy(true)
+    setMessage(null)
+    try {
+      const result = await UpdateInstaller.install({ url: update.apkUrl })
+      if (result.needsPermission) {
+        setMessage('Allow Nova to install apps, then tap Install update again.')
+      }
+    } catch (error) {
+      const text = error instanceof Error ? error.message : 'Install failed'
+      setMessage(text)
+    } finally {
+      setBusy(false)
+    }
+  }, [busy, update])
+
   return {
     update,
+    busy,
+    message,
     localVersion: LOCAL_VERSION,
-    install() {
-      if (!update?.apkUrl) return
-      window.open(update.apkUrl, '_blank', 'noopener')
-    },
+    install,
   }
 }

@@ -20,9 +20,12 @@ export default function App() {
 
       {appUpdate.update ? (
         <div className="update-banner">
-          <p>Nova {appUpdate.update.version} is ready. Install over this app to keep your save.</p>
-          <button type="button" onClick={appUpdate.install}>
-            Install update
+          <p>
+            {appUpdate.message ??
+              `Nova ${appUpdate.update.version} is ready. Install over this app to keep your save.`}
+          </p>
+          <button type="button" disabled={appUpdate.busy} onClick={() => void appUpdate.install()}>
+            {appUpdate.busy ? 'Downloading…' : 'Install update'}
           </button>
         </div>
       ) : null}

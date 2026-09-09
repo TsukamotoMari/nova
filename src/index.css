@@ -141,6 +141,11 @@ p {
   font-size: 0.75rem;
 }
 
+.update-banner button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 .hud {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
