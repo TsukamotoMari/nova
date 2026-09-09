@@ -194,22 +194,14 @@ public class UpdateInstallerPlugin extends Plugin {
             }
             Intent callback = new Intent(ACTION_INSTALL_STATUS);
             callback.setPackage(getContext().getPackageName());
-            int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE;
-            PendingIntent pending = pendingBroadcast(sessionId, callback, flags);
+            PendingIntent pending = PendingIntent.getBroadcast(
+                getContext(),
+                sessionId,
+                callback,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+            );
             session.commit(pending.getIntentSender());
         }
-    }
-
-    private PendingIntent pendingBroadcast(int sessionId, Intent callback, int flags) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            Bundle options = ActivityOptions.makeBasic()
-                .setPendingIntentBackgroundActivityStartMode(
-                    ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
-                )
-                .toBundle();
-            return PendingIntent.getBroadcast(getContext(), sessionId, callback, flags, options);
-        }
-        return PendingIntent.getBroadcast(getContext(), sessionId, callback, flags);
     }
 
     private void startFromActivity(Intent intent) {
