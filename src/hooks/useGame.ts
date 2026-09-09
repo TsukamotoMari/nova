@@ -1,0 +1,171 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ACHIEVEMENTS } from '../game/data'
+import {
+  applyOffline,
+  collectAchievements,
+  createNewGame,
+  mine,
+  productionRate,
+  purchaseGenerator,
+  purchaseUpgrade,
+  purchaseClickRanks,
+  purchaseCorePerk,
+  tick,
+  warp,
+  type BuyMode,
+  type GameState,
+} from '../game/engine'
+import { clearSave, loadSave, writeSave } from '../game/save'
+
+export interface Toast {
+  id: number
+  title: string
+  flavor: string
+}
+
+export interface OfflineReport {
+  elapsed: number
+  earned: number
+}
+
+export function useGame() {
+  const stateRef = useRef<GameState>(createNewGame())
+  const [state, setState] = useState<GameState>(() => createNewGame())
+  const [buyMode, setBuyMode] = useState<BuyMode>(1)
+  const buyModeRef = useRef<BuyMode>(1)
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const [offline, setOffline] = useState<OfflineReport | null>(null)
+  const toastId = useRef(0)
+
+  const publish = useCallback((next: GameState) => {
+    const collected = collectAchievements(next)
+    stateRef.current = collected.state
+    setState(collected.state)
+    if (collected.unlocked.length > 0) {
+      const extra = collected.unlocked.map((id) => {
+        const def = ACHIEVEMENTS.find((a) => a.id === id)
+        toastId.current += 1
+        return {
+          id: toastId.current,
+          title: def?.name ?? 'Claim logged',
+          flavor: def?.flavor ?? '',
+        }
+      })
+      setToasts((prev) => [...prev, ...extra].slice(-4))
+      for (const toast of extra) {
+        window.setTimeout(() => {
+          setToasts((prev) => prev.filter((item) => item.id !== toast.id))
+        }, 4200)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    buyModeRef.current = buyMode
+  }, [buyMode])
+
+  useEffect(() => {
+    const saved = loadSave()
+    const base = saved ?? createNewGame()
+    const offlineResult = applyOffline(base)
+    publish(offlineResult.state)
+    if (offlineResult.elapsed >= 60 && offlineResult.earned > 0) {
+      setOffline({ elapsed: offlineResult.elapsed, earned: offlineResult.earned })
+    }
+
+    let last = performance.now()
+    let uiAcc = 0
+    let saveAcc = 0
+    let frame = 0
+
+    const loop = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 1)
+      last = now
+      stateRef.current = tick(stateRef.current, dt)
+      uiAcc += dt
+      saveAcc += dt
+      if (uiAcc >= 0.1) {
+        uiAcc = 0
+        publish(stateRef.current)
+      }
+      if (saveAcc >= 2) {
+        saveAcc = 0
+        writeSave(stateRef.current)
+      }
+      frame = requestAnimationFrame(loop)
+    }
+
+    frame = requestAnimationFrame(loop)
+
+    const persist = () => writeSave(stateRef.current)
+    window.addEventListener('beforeunload', persist)
+    document.addEventListener('visibilitychange', persist)
+
+    return () => {
+      cancelAnimationFrame(frame)
+      persist()
+      window.removeEventListener('beforeunload', persist)
+      document.removeEventListener('visibilitychange', persist)
+    }
+  }, [publish])
+
+  const strike = useCallback(() => {
+    const result = mine(stateRef.current)
+    publish(result.state)
+    return result
+  }, [publish])
+
+  const buyGenerator = useCallback(
+    (id: string) => {
+      publish(purchaseGenerator(stateRef.current, id, buyModeRef.current))
+    },
+    [publish],
+  )
+
+  const buyUpgrade = useCallback(
+    (id: string) => {
+      publish(purchaseUpgrade(stateRef.current, id))
+    },
+    [publish],
+  )
+
+  const buyClickRanks = useCallback(() => {
+    publish(purchaseClickRanks(stateRef.current, buyModeRef.current))
+  }, [publish])
+
+  const buyCorePerk = useCallback((id: string) => {
+    publish(purchaseCorePerk(stateRef.current, id))
+  }, [publish])
+
+  const doWarp = useCallback(() => {
+    publish(warp(stateRef.current))
+  }, [publish])
+
+  const hardReset = useCallback(() => {
+    clearSave()
+    publish(createNewGame())
+    setOffline(null)
+  }, [publish])
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id))
+  }, [])
+
+  return {
+    state,
+    rate: productionRate(state),
+    buyMode,
+    setBuyMode,
+    toasts,
+    offline,
+    dismissOffline: () => setOffline(null),
+    dismissToast,
+    strike,
+    buyGenerator,
+    buyUpgrade,
+    buyClickRanks,
+    buyCorePerk,
+    doWarp,
+    hardReset,
+  }
+}

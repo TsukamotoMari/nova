@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build GitHub Pages
+        env:
+          GITHUB_PAGES: '1'
+          VITE_GITHUB_REPO: ${{ github.repository }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: pages
+        uses: actions/deploy-pages@v4
+
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: Restore debug keystore
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            mkdir -p "$HOME/.android"
+            echo "$DEBUG_KEYSTORE_BASE64" | base64 -d > "$HOME/.android/debug.keystore"
+          fi
+      - run: npm ci
+      - name: Build APK
+        env:
+          VITE_GITHUB_REPO: ${{ github.repository }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: npm run android:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nova-debug-apk
+          path: releases/nova-debug.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk
+          name: Latest APK
+          prerelease: true
+          make_latest: false
+          files: releases/nova-debug.apk
+          body: |
+            Sideload this over the current Nova install. Same package and debug key, so your save stays.
+
+            Built from ${{ github.sha }}
+            Version ${{ github.run_number }}
