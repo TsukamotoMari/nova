@@ -17,12 +17,19 @@ interface Chip {
   y: number
 }
 
+interface PointerTrack {
+  x: number
+  y: number
+  lastY: number
+  scrolling: boolean
+}
+
 let chipSeq = 0
 
 export function MineButton({ onStrike, strikePower }: MineButtonProps) {
   const [struck, setStruck] = useState(false)
   const [chips, setChips] = useState<Chip[]>([])
-  const pointerStart = useRef<{ id: number; x: number; y: number } | null>(null)
+  const pointers = useRef(new Map<number, PointerTrack>())
 
   function strikeAt(target: HTMLButtonElement, clientX: number, clientY: number) {
     const result = onStrike()
@@ -47,21 +54,34 @@ export function MineButton({ onStrike, strikePower }: MineButtonProps) {
 
   function handlePointerDown(event: React.PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0) return
-    pointerStart.current = { id: event.pointerId, x: event.clientX, y: event.clientY }
-  }
-
-  function handlePointerUp(event: React.PointerEvent<HTMLButtonElement>) {
-    const start = pointerStart.current
-    pointerStart.current = null
-    if (!start || start.id !== event.pointerId) return
-    const dx = event.clientX - start.x
-    const dy = event.clientY - start.y
-    if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) return
+    pointers.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+      lastY: event.clientY,
+      scrolling: false,
+    })
+    event.currentTarget.setPointerCapture(event.pointerId)
     strikeAt(event.currentTarget, event.clientX, event.clientY)
   }
 
-  function handlePointerCancel() {
-    pointerStart.current = null
+  function handlePointerMove(event: React.PointerEvent<HTMLButtonElement>) {
+    const track = pointers.current.get(event.pointerId)
+    if (!track) return
+    const dx = event.clientX - track.x
+    const dy = event.clientY - track.y
+    if (!track.scrolling && dy * dy + dx * dx > TAP_SLOP * TAP_SLOP && Math.abs(dy) >= Math.abs(dx)) {
+      track.scrolling = true
+    }
+    if (!track.scrolling) return
+    window.scrollBy(0, track.lastY - event.clientY)
+    track.lastY = event.clientY
+  }
+
+  function forgetPointer(event: React.PointerEvent<HTMLButtonElement>) {
+    pointers.current.delete(event.pointerId)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
@@ -78,8 +98,9 @@ export function MineButton({ onStrike, strikePower }: MineButtonProps) {
         type="button"
         className={`asteroid ${struck ? 'is-struck' : ''}`}
         onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
+        onPointerMove={handlePointerMove}
+        onPointerUp={forgetPointer}
+        onPointerCancel={forgetPointer}
         onKeyDown={handleKeyDown}
         aria-label="Mine the asteroid"
       >

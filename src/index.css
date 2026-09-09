@@ -288,7 +288,9 @@ p {
   padding: 0;
   background: transparent;
   isolation: isolate;
-  touch-action: pan-y;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .asteroid-art,
