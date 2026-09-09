@@ -15,7 +15,7 @@ import {
   type BuyMode,
   type GameState,
 } from '../game/engine'
-import { clearSave, loadSave, writeSave } from '../game/save'
+import { clearSave, loadDurableSave, loadSave, prepareDurableRestore, writeSave } from '../game/save'
 
 export interface Toast {
   id: number
@@ -65,47 +65,91 @@ export function useGame() {
   }, [buyMode])
 
   useEffect(() => {
-    const saved = loadSave()
-    const base = saved ?? createNewGame()
-    const offlineResult = applyOffline(base)
-    publish(offlineResult.state)
-    if (offlineResult.elapsed >= 60 && offlineResult.earned > 0) {
-      setOffline({ elapsed: offlineResult.elapsed, earned: offlineResult.earned })
-    }
-
+    let cancelled = false
+    let frame = 0
     let last = performance.now()
     let uiAcc = 0
     let saveAcc = 0
-    let frame = 0
+    let started = false
 
-    const loop = (now: number) => {
-      const dt = Math.min((now - last) / 1000, 1)
-      last = now
-      stateRef.current = tick(stateRef.current, dt)
-      uiAcc += dt
-      saveAcc += dt
-      if (uiAcc >= 0.1) {
-        uiAcc = 0
-        publish(stateRef.current)
+    const begin = (base: GameState) => {
+      if (cancelled || started) return
+      started = true
+      const offlineResult = applyOffline(base)
+      publish(offlineResult.state)
+      if (offlineResult.elapsed >= 60 && offlineResult.earned > 0) {
+        setOffline({ elapsed: offlineResult.elapsed, earned: offlineResult.earned })
       }
-      if (saveAcc >= 2) {
-        saveAcc = 0
-        writeSave(stateRef.current)
+      writeSave(offlineResult.state)
+
+      const loop = (now: number) => {
+        const dt = Math.min((now - last) / 1000, 1)
+        last = now
+        stateRef.current = tick(stateRef.current, dt)
+        uiAcc += dt
+        saveAcc += dt
+        if (uiAcc >= 0.1) {
+          uiAcc = 0
+          publish(stateRef.current)
+        }
+        if (saveAcc >= 2) {
+          saveAcc = 0
+          writeSave(stateRef.current)
+        }
+        frame = requestAnimationFrame(loop)
       }
+
+      last = performance.now()
       frame = requestAnimationFrame(loop)
     }
 
-    frame = requestAnimationFrame(loop)
+    const persist = () => {
+      if (!started) return
+      writeSave(stateRef.current)
+    }
 
-    const persist = () => writeSave(stateRef.current)
+    const boot = async () => {
+      const local = loadSave()
+      if (local) {
+        begin(local)
+        return
+      }
+
+      let vault = await loadDurableSave()
+      if (!vault.state && vault.exists) {
+        const needsPermission = await prepareDurableRestore()
+        if (needsPermission) return
+        vault = await loadDurableSave()
+      }
+      if (cancelled) return
+      if (!vault.state && vault.exists) return
+      begin(vault.state ?? createNewGame())
+    }
+
+    void boot()
+
+    const onVisible = () => {
+      if (cancelled) return
+      if (started) {
+        persist()
+        return
+      }
+      if (document.visibilityState !== 'visible') return
+      void loadDurableSave().then((vault) => {
+        if (cancelled || started) return
+        begin(vault.state ?? createNewGame())
+      })
+    }
+
     window.addEventListener('beforeunload', persist)
-    document.addEventListener('visibilitychange', persist)
+    document.addEventListener('visibilitychange', onVisible)
 
     return () => {
+      cancelled = true
       cancelAnimationFrame(frame)
       persist()
       window.removeEventListener('beforeunload', persist)
-      document.removeEventListener('visibilitychange', persist)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [publish])
 
