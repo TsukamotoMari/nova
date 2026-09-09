@@ -1,5 +1,7 @@
 apply plugin: 'com.android.application'
 
+def novaVersion = new groovy.json.JsonSlurper().parse(rootProject.file('../package.json')).version
+
 android {
     namespace = "com.nova.mining"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -8,7 +10,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
-        versionName "0.2.5"
+        versionName novaVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -43,6 +45,12 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+android.applicationVariants.configureEach { variant ->
+    variant.outputs.configureEach { output ->
+        output.outputFileName = "nova-${variant.versionName}-${variant.versionCode}.apk"
+    }
+}
 
 try {
     def servicesJSON = file('google-services.json')

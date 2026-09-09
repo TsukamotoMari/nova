@@ -161,6 +161,14 @@ p {
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.85);
 }
 
+.build {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 .kicker {
   color: var(--plasma);
   text-transform: uppercase;

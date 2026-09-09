@@ -21,8 +21,9 @@ function versionPlugin(): Plugin {
   return {
     name: 'nova-version',
     generateBundle() {
+      const apkName = `nova-${pkg.version}-${versionCode}.apk`
       const apkUrl = githubRepo
-        ? `https://github.com/${githubRepo}/releases/download/apk/nova-debug.apk`
+        ? `https://github.com/${githubRepo}/releases/download/v${pkg.version}-${versionCode}/${apkName}`
         : ''
       this.emitFile({
         type: 'asset',
@@ -31,6 +32,7 @@ function versionPlugin(): Plugin {
           {
             version: pkg.version,
             versionCode: Number(versionCode),
+            apkName,
             apkUrl,
           },
           null,

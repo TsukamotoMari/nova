@@ -1,4 +1,4 @@
-import { chmod, cp, mkdir, readFile } from 'node:fs/promises'
+import { access, chmod, cp, mkdir, readFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -38,12 +38,26 @@ await new Promise((resolve, reject) => {
   })
 })
 
-const built = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
+const versionCode = process.env.VERSION_CODE ?? '1'
+const apkName = `nova-${pkg.version}-${versionCode}.apk`
+const outDir = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug')
+const named = path.join(outDir, apkName)
+const fallback = path.join(outDir, 'app-debug.apk')
+const built = await exists(named) ? named : fallback
 const releases = path.join(root, 'releases')
 await mkdir(releases, { recursive: true })
-const stable = path.join(releases, 'nova-debug.apk')
-const versioned = path.join(releases, `nova-v${pkg.version}-debug.apk`)
-await cp(built, stable)
+const latest = path.join(releases, 'nova-debug.apk')
+const versioned = path.join(releases, apkName)
+await cp(built, latest)
 await cp(built, versioned)
-console.log(`APK copied to ${stable}`)
+console.log(`APK copied to ${latest}`)
 console.log(`APK copied to ${versioned}`)
+
+async function exists(file) {
+  try {
+    await access(file)
+    return true
+  } catch {
+    return false
+  }
+}

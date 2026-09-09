@@ -61,6 +61,12 @@ jobs:
             echo "$DEBUG_KEYSTORE_BASE64" | base64 -d > "$HOME/.android/debug.keystore"
           fi
       - run: npm ci
+      - id: meta
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "apk=nova-${VERSION}-${{ github.run_number }}.apk" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
       - name: Build APK
         env:
           VITE_GITHUB_REPO: ${{ github.repository }}
@@ -68,9 +74,22 @@ jobs:
         run: npm run android:build
       - uses: actions/upload-artifact@v4
         with:
-          name: nova-debug-apk
-          path: releases/nova-debug.apk
-      - uses: softprops/action-gh-release@v2
+          name: ${{ steps.meta.outputs.apk }}
+          path: releases/${{ steps.meta.outputs.apk }}
+      - name: Publish versioned APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Nova ${{ steps.meta.outputs.version }} (${{ github.run_number }})
+          files: releases/${{ steps.meta.outputs.apk }}
+          body: |
+            Nova ${{ steps.meta.outputs.version }} (build ${{ github.run_number }})
+
+            Sideload this over the current install. Same package and debug key, so your save stays.
+
+            Built from ${{ github.sha }}
+      - name: Update latest APK alias
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: apk
           name: Latest APK
@@ -78,7 +97,8 @@ jobs:
           make_latest: false
           files: releases/nova-debug.apk
           body: |
-            Sideload this over the current Nova install. Same package and debug key, so your save stays.
+            Latest Nova APK: ${{ steps.meta.outputs.version }} (build ${{ github.run_number }})
 
-            Built from ${{ github.sha }}
-            Version ${{ github.run_number }}
+            Versioned file: [${{ steps.meta.outputs.apk }}](https://github.com/${{ github.repository }}/releases/download/${{ steps.meta.outputs.tag }}/${{ steps.meta.outputs.apk }})
+
+            Sideload this over the current install. Same package and debug key, so your save stays.

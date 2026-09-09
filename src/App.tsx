@@ -24,7 +24,7 @@ export default function App() {
             {appUpdate.message ??
               (appUpdate.ready
                 ? 'Update downloaded. Tap Open installer and confirm the Android screen.'
-                : `Nova ${appUpdate.update.version} is ready. Install over this app to keep your save.`)}
+                : `Nova ${appUpdate.update.version} (build ${appUpdate.update.versionCode}) is ready. Install over this app to keep your save.`)}
           </p>
           <button type="button" disabled={appUpdate.busy} onClick={() => void appUpdate.install()}>
             {appUpdate.busy
@@ -40,6 +40,9 @@ export default function App() {
         <div className="brand">
           <p className="kicker">Cosmic mining incremental</p>
           <h1>NOVA</h1>
+          <p className="build">
+            v{appUpdate.localVersion} · {appUpdate.localVersionCode}
+          </p>
         </div>
         <div className="ore-readout">
           <p className="ore-value">{formatNumber(game.state.ore)}</p>

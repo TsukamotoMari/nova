@@ -6,6 +6,7 @@ export interface RemoteVersion {
   version: string
   versionCode: number
   apkUrl: string
+  apkName?: string
 }
 
 const LOCAL_VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
@@ -79,6 +80,7 @@ export function useAppUpdate() {
     ready,
     message,
     localVersion: LOCAL_VERSION,
+    localVersionCode: LOCAL_VERSION_CODE,
     install,
   }
 }
