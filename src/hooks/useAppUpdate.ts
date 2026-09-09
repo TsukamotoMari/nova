@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { useCallback, useEffect, useState } from 'react'
-import UpdateInstaller from '../plugins/updateInstaller'
+import UpdateInstaller, { type UpdateInstallResult } from '../plugins/updateInstaller'
 
 export interface RemoteVersion {
   version: string
@@ -15,6 +15,7 @@ const REPO = import.meta.env.VITE_GITHUB_REPO ?? ''
 export function useAppUpdate() {
   const [update, setUpdate] = useState<RemoteVersion | null>(null)
   const [busy, setBusy] = useState(false)
+  const [ready, setReady] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -41,26 +42,41 @@ export function useAppUpdate() {
     return () => ctrl.abort()
   }, [])
 
+  const handleResult = useCallback((result: UpdateInstallResult) => {
+    if (result.ready) setReady(true)
+    if (result.needsPermission) {
+      setMessage('Turn on Allow from this source, come back, then tap Open installer.')
+      return
+    }
+    if (result.launched) {
+      setMessage('Confirm the Android install screen. If it did not appear, tap Open installer.')
+      return
+    }
+    setMessage('Update is downloaded. Tap Open installer.')
+  }, [])
+
   const install = useCallback(async () => {
     if (!update?.apkUrl || busy) return
     setBusy(true)
     setMessage(null)
     try {
-      const result = await UpdateInstaller.install({ url: update.apkUrl })
-      if (result.needsPermission) {
-        setMessage('Allow Nova to install apps, then tap Install update again.')
-      }
+      const result = ready
+        ? await UpdateInstaller.openInstaller()
+        : await UpdateInstaller.install({ url: update.apkUrl, versionCode: update.versionCode })
+      handleResult(result)
     } catch (error) {
       const text = error instanceof Error ? error.message : 'Install failed'
       setMessage(text)
+      if (text.includes('gone')) setReady(false)
     } finally {
       setBusy(false)
     }
-  }, [busy, update])
+  }, [busy, handleResult, ready, update])
 
   return {
     update,
     busy,
+    ready,
     message,
     localVersion: LOCAL_VERSION,
     install,

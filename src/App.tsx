@@ -22,10 +22,16 @@ export default function App() {
         <div className="update-banner">
           <p>
             {appUpdate.message ??
-              `Nova ${appUpdate.update.version} is ready. Install over this app to keep your save.`}
+              (appUpdate.ready
+                ? 'Update downloaded. Tap Open installer and confirm the Android screen.'
+                : `Nova ${appUpdate.update.version} is ready. Install over this app to keep your save.`)}
           </p>
           <button type="button" disabled={appUpdate.busy} onClick={() => void appUpdate.install()}>
-            {appUpdate.busy ? 'Downloading…' : 'Install update'}
+            {appUpdate.busy
+              ? 'Downloading…'
+              : appUpdate.ready
+                ? 'Open installer'
+                : 'Install update'}
           </button>
         </div>
       ) : null}
