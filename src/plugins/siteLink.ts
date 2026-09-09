@@ -1,6 +1,6 @@
 import { registerPlugin } from '@capacitor/core'
 
-export const SITE_URL = 'https://maris-indie-games.vercel.app/'
+export const SITE_URL = 'https://maris-indie-games.vercel.app/g/nova'
 
 export interface SiteLinkPlugin {
   open(options: { url: string }): Promise<void>
