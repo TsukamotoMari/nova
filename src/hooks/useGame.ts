@@ -72,35 +72,45 @@ export function useGame() {
     let saveAcc = 0
     let started = false
 
-    const begin = (base: GameState) => {
-      if (cancelled || started) return
-      started = true
-      const offlineResult = applyOffline(base)
+    const creditAway = () => {
+      const offlineResult = applyOffline(stateRef.current)
       publish(offlineResult.state)
       if (offlineResult.elapsed >= 60 && offlineResult.earned > 0) {
         setOffline({ elapsed: offlineResult.elapsed, earned: offlineResult.earned })
       }
       writeSave(offlineResult.state)
+    }
 
-      const loop = (now: number) => {
-        const dt = Math.min((now - last) / 1000, 1)
-        last = now
-        stateRef.current = tick(stateRef.current, dt)
-        uiAcc += dt
-        saveAcc += dt
-        if (uiAcc >= 0.1) {
-          uiAcc = 0
-          publish(stateRef.current)
-        }
-        if (saveAcc >= 2) {
-          saveAcc = 0
-          writeSave(stateRef.current)
-        }
-        frame = requestAnimationFrame(loop)
+    const loop = (now: number) => {
+      if (cancelled || document.visibilityState === 'hidden') return
+      const dt = Math.min((now - last) / 1000, 1)
+      last = now
+      stateRef.current = tick(stateRef.current, dt)
+      uiAcc += dt
+      saveAcc += dt
+      if (uiAcc >= 0.1) {
+        uiAcc = 0
+        publish(stateRef.current)
       }
-
-      last = performance.now()
+      if (saveAcc >= 2) {
+        saveAcc = 0
+        writeSave(stateRef.current)
+      }
       frame = requestAnimationFrame(loop)
+    }
+
+    const startLoop = () => {
+      last = performance.now()
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(loop)
+    }
+
+    const begin = (base: GameState) => {
+      if (cancelled || started) return
+      started = true
+      stateRef.current = base
+      creditAway()
+      startLoop()
     }
 
     const persist = () => {
@@ -130,18 +140,23 @@ export function useGame() {
 
     const onVisible = () => {
       if (cancelled) return
-      if (started) {
+      if (document.visibilityState === 'hidden') {
         persist()
         return
       }
-      if (document.visibilityState !== 'visible') return
-      void loadDurableSave().then((vault) => {
-        if (cancelled || started) return
-        begin(vault.state ?? createNewGame())
-      })
+      if (!started) {
+        void loadDurableSave().then((vault) => {
+          if (cancelled || started) return
+          begin(vault.state ?? createNewGame())
+        })
+        return
+      }
+      creditAway()
+      startLoop()
     }
 
     window.addEventListener('beforeunload', persist)
+    window.addEventListener('pagehide', persist)
     document.addEventListener('visibilitychange', onVisible)
 
     return () => {
@@ -149,6 +164,7 @@ export function useGame() {
       cancelAnimationFrame(frame)
       persist()
       window.removeEventListener('beforeunload', persist)
+      window.removeEventListener('pagehide', persist)
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [publish])
