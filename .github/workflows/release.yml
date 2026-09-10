@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   web:
+    needs: apk
     runs-on: ubuntu-latest
     environment:
       name: github-pages

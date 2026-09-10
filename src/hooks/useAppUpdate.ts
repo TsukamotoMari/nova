@@ -6,6 +6,7 @@ export interface RemoteVersion {
   version: string
   versionCode: number
   apkUrl: string
+  fallbackUrl?: string
   apkName?: string
 }
 
@@ -46,14 +47,14 @@ export function useAppUpdate() {
   const handleResult = useCallback((result: UpdateInstallResult) => {
     if (result.ready) setReady(true)
     if (result.needsPermission) {
-      setMessage('Turn on Allow from this source, come back, then tap Open installer.')
+      setMessage('Turn on Allow from this source, come back, then tap Install now.')
       return
     }
     if (result.launched) {
-      setMessage('Confirm the Android install screen. If it did not appear, tap Open installer.')
+      setMessage('Confirm the Android install screen. If it did not appear, tap Install now again.')
       return
     }
-    setMessage('Update is downloaded. Tap Open installer.')
+    setMessage('Download finished. Tap Install now and confirm the Android screen.')
   }, [])
 
   const install = useCallback(async () => {
@@ -63,7 +64,11 @@ export function useAppUpdate() {
     try {
       const result = ready
         ? await UpdateInstaller.openInstaller()
-        : await UpdateInstaller.install({ url: update.apkUrl, versionCode: update.versionCode })
+        : await UpdateInstaller.install({
+            url: update.apkUrl,
+            fallbackUrl: update.fallbackUrl,
+            versionCode: update.versionCode,
+          })
       handleResult(result)
     } catch (error) {
       const text = error instanceof Error ? error.message : 'Install failed'

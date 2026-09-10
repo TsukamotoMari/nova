@@ -1,7 +1,6 @@
 package com.nova.mining;
 
 import android.app.Activity;
-import android.app.ActivityOptions;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -12,16 +11,17 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Log;
 
+import androidx.activity.result.ActivityResult;
 import androidx.core.content.FileProvider;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.File;
@@ -42,8 +42,6 @@ public class UpdateInstallerPlugin extends Plugin {
     private static final String META_NAME = "nova-update.version";
     private static final String ACTION_INSTALL_STATUS = "com.nova.mining.INSTALL_STATUS";
 
-    private boolean resumeInstall;
-
     private final BroadcastReceiver installReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -57,7 +55,13 @@ public class UpdateInstallerPlugin extends Plugin {
                 Log.w(TAG, "Install confirm intent missing");
                 return;
             }
-            startFromActivity(confirm);
+            Activity activity = getActivity();
+            if (activity != null) {
+                activity.startActivity(confirm);
+            } else {
+                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(confirm);
+            }
         }
     };
 
@@ -79,22 +83,10 @@ public class UpdateInstallerPlugin extends Plugin {
         }
     }
 
-    @Override
-    protected void handleOnResume() {
-        if (!resumeInstall) return;
-        File apk = cachedApk();
-        if (!isValidApk(apk) || needsInstallPermission()) return;
-        resumeInstall = false;
-        try {
-            launchInstaller(apk);
-        } catch (Exception error) {
-            Log.w(TAG, "Resume install failed", error);
-        }
-    }
-
     @PluginMethod
     public void install(PluginCall call) {
         String url = call.getString("url");
+        String fallbackUrl = call.getString("fallbackUrl");
         Integer versionCode = call.getInt("versionCode");
         if (url == null || url.isEmpty()) {
             call.reject("Missing update URL");
@@ -103,13 +95,12 @@ public class UpdateInstallerPlugin extends Plugin {
 
         new Thread(() -> {
             try {
-                File apk = ensureApk(url, versionCode);
-                Activity activity = getActivity();
-                if (activity == null) {
-                    call.reject("Open Nova and tap Install again.");
-                    return;
-                }
-                activity.runOnUiThread(() -> finishLaunch(apk, call));
+                ensureApk(url, fallbackUrl, versionCode);
+                JSObject ret = new JSObject();
+                ret.put("ready", true);
+                ret.put("launched", false);
+                ret.put("needsPermission", false);
+                call.resolve(ret);
             } catch (Exception error) {
                 call.reject(error.getMessage() == null ? "Download failed" : error.getMessage());
             }
@@ -120,59 +111,74 @@ public class UpdateInstallerPlugin extends Plugin {
     public void openInstaller(PluginCall call) {
         File apk = cachedApk();
         if (!isValidApk(apk)) {
-            call.reject("The update file is gone. Tap Install update to download it again.");
+            call.reject("The update file is gone. Tap Download update again.");
             return;
         }
-        finishLaunch(apk, call);
-    }
 
-    private void finishLaunch(File apk, PluginCall call) {
-        try {
-            if (needsInstallPermission()) {
-                resumeInstall = true;
-                Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
-                settings.setData(Uri.parse("package:" + getContext().getPackageName()));
-                startFromActivity(settings);
-                JSObject ret = new JSObject();
-                ret.put("needsPermission", true);
-                ret.put("ready", true);
-                ret.put("launched", false);
-                call.resolve(ret);
-                return;
-            }
-
-            launchInstaller(apk);
-            JSObject ret = new JSObject();
-            ret.put("needsPermission", false);
-            ret.put("ready", true);
-            ret.put("launched", true);
-            call.resolve(ret);
-        } catch (Exception error) {
-            call.reject(error.getMessage() == null ? "Could not open installer" : error.getMessage());
+        if (needsInstallPermission()) {
+            Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+            settings.setData(Uri.parse("package:" + getContext().getPackageName()));
+            startActivityForResult(call, settings, "permissionResult");
+            return;
         }
+
+        launchInstaller(apk, call);
     }
 
-    private void launchInstaller(File apk) throws Exception {
+    @ActivityCallback
+    private void permissionResult(PluginCall call, ActivityResult result) {
+        if (needsInstallPermission()) {
+            JSObject ret = new JSObject();
+            ret.put("needsPermission", true);
+            ret.put("ready", true);
+            ret.put("launched", false);
+            call.resolve(ret);
+            return;
+        }
+        File apk = cachedApk();
+        if (!isValidApk(apk)) {
+            call.reject("The update file is gone. Tap Download update again.");
+            return;
+        }
+        launchInstaller(apk, call);
+    }
+
+    @ActivityCallback
+    private void installFinished(PluginCall call, ActivityResult result) {
+        JSObject ret = new JSObject();
+        ret.put("needsPermission", false);
+        ret.put("ready", true);
+        ret.put("launched", true);
+        call.resolve(ret);
+    }
+
+    private void launchInstaller(File apk, PluginCall call) {
         try {
-            startViewIntent(apk);
+            Uri uri = FileProvider.getUriForFile(
+                getContext(),
+                getContext().getPackageName() + ".fileprovider",
+                apk
+            );
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(uri, "application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+            intent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
+            grantUri(intent, uri);
+            startActivityForResult(call, intent, "installFinished");
         } catch (Exception viewError) {
             Log.w(TAG, "ACTION_VIEW install failed, using session", viewError);
-            commitSession(apk);
+            try {
+                commitSession(apk);
+                JSObject ret = new JSObject();
+                ret.put("needsPermission", false);
+                ret.put("ready", true);
+                ret.put("launched", true);
+                call.resolve(ret);
+            } catch (Exception sessionError) {
+                call.reject(sessionError.getMessage() == null ? "Could not open installer" : sessionError.getMessage());
+            }
         }
-    }
-
-    private void startViewIntent(File apk) {
-        Uri uri = FileProvider.getUriForFile(
-            getContext(),
-            getContext().getPackageName() + ".fileprovider",
-            apk
-        );
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setDataAndType(uri, "application/vnd.android.package-archive");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-        grantUri(intent, uri);
-        startFromActivity(intent);
     }
 
     private void commitSession(File apk) throws IOException {
@@ -204,25 +210,6 @@ public class UpdateInstallerPlugin extends Plugin {
         }
     }
 
-    private void startFromActivity(Intent intent) {
-        Activity activity = getActivity();
-        if (activity != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                Bundle options = ActivityOptions.makeBasic()
-                    .setPendingIntentBackgroundActivityStartMode(
-                        ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
-                    )
-                    .toBundle();
-                activity.startActivity(intent, options);
-            } else {
-                activity.startActivity(intent);
-            }
-            return;
-        }
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        getContext().startActivity(intent);
-    }
-
     private void grantUri(Intent intent, Uri uri) {
         PackageManager pm = getContext().getPackageManager();
         List<ResolveInfo> matches = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
@@ -240,13 +227,22 @@ public class UpdateInstallerPlugin extends Plugin {
             && !getContext().getPackageManager().canRequestPackageInstalls();
     }
 
-    private File ensureApk(String url, Integer versionCode) throws IOException {
+    private File ensureApk(String url, String fallbackUrl, Integer versionCode) throws IOException {
         if (hasCachedApk(versionCode)) {
             return cachedApk();
         }
-        File apk = download(url);
-        writeMeta(versionCode);
-        return apk;
+        try {
+            File apk = download(url);
+            writeMeta(versionCode);
+            return apk;
+        } catch (IOException first) {
+            if (fallbackUrl == null || fallbackUrl.isEmpty() || fallbackUrl.equals(url)) {
+                throw first;
+            }
+            File apk = download(fallbackUrl);
+            writeMeta(versionCode);
+            return apk;
+        }
     }
 
     private boolean hasCachedApk(Integer versionCode) {
@@ -309,7 +305,8 @@ public class UpdateInstallerPlugin extends Plugin {
                 "User-Agent",
                 "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36"
             );
-            conn.setRequestProperty("Accept", "application/vnd.android.package-archive,*/*");
+            conn.setRequestProperty("Accept", hop == 0 ? "application/octet-stream,*/*" : "*/*");
+            conn.setRequestProperty("Accept-Encoding", "identity");
             int code = conn.getResponseCode();
             if (code >= 300 && code < 400) {
                 String next = conn.getHeaderField("Location");

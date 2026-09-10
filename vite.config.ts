@@ -25,6 +25,9 @@ function versionPlugin(): Plugin {
       const apkUrl = githubRepo
         ? `https://github.com/${githubRepo}/releases/download/v${pkg.version}-${versionCode}/${apkName}`
         : ''
+      const fallbackUrl = githubRepo
+        ? `https://github.com/${githubRepo}/releases/download/apk/nova-debug.apk`
+        : ''
       this.emitFile({
         type: 'asset',
         fileName: 'version.json',
@@ -34,6 +37,7 @@ function versionPlugin(): Plugin {
             versionCode: Number(versionCode),
             apkName,
             apkUrl,
+            fallbackUrl,
           },
           null,
           2,

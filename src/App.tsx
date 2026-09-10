@@ -33,15 +33,15 @@ export default function App() {
           <p>
             {appUpdate.message ??
               (appUpdate.ready
-                ? 'Update downloaded. Tap Open installer and confirm the Android screen.'
-                : `Nova ${appUpdate.update.version} (build ${appUpdate.update.versionCode}) is ready. Install over this app to keep your save.`)}
+                ? 'Download finished. Tap Install now and confirm the Android screen.'
+                : `Nova ${appUpdate.update.version} (build ${appUpdate.update.versionCode}) is ready. Download it, then install over this app to keep your save.`)}
           </p>
           <button type="button" disabled={appUpdate.busy} onClick={() => void appUpdate.install()}>
             {appUpdate.busy
               ? 'Downloading…'
               : appUpdate.ready
-                ? 'Open installer'
-                : 'Install update'}
+                ? 'Install now'
+                : 'Download update'}
           </button>
         </div>
       ) : null}
