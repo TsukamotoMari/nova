@@ -18,6 +18,7 @@ import {
   clickUpgradeReady,
   coreMultiplier,
   corePerkReady,
+  gearUpgradeReady,
   generatorRate,
   generatorVisible,
   maxBuyCount,
@@ -74,6 +75,7 @@ export function Shop({
             {labelFor(id)}
             {id === 'warp' && (gain > 0 || corePerkReady(state)) ? <span className="tab-pip" /> : null}
             {id === 'clicks' && clickUpgradeReady(state) ? <span className="tab-pip" /> : null}
+            {id === 'upgrades' && gearUpgradeReady(state) ? <span className="tab-pip" /> : null}
           </button>
         ))}
       </div>

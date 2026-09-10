@@ -265,6 +265,16 @@ export function clickUpgradeReady(state: GameState): boolean {
   )
 }
 
+export function gearUpgradeReady(state: GameState): boolean {
+  return UPGRADES.some(
+    (upgrade) =>
+      upgrade.kind !== 'click' &&
+      !state.upgrades[upgrade.id] &&
+      upgradeAvailable(state, upgrade.id) &&
+      state.ore >= upgrade.cost,
+  )
+}
+
 export function purchaseCorePerk(state: GameState, id: string): GameState {
   const def = perkById(id)
   const owned = perkRank(state, id)
@@ -334,6 +344,14 @@ export function achievementUnlocked(state: GameState, id: string): boolean {
       return state.cores >= 10 || state.lifetimeCores >= 10
     case 'clicks-1k':
       return state.lifetimeClicks >= 1_000
+    case 'nebula':
+      return (state.generators.nebula ?? 0) >= 1
+    case 'foundry':
+      return (state.generators.foundry ?? 0) >= 1
+    case 'click-kit':
+      return UPGRADES.filter((upgrade) => upgrade.kind === 'click').every(
+        (upgrade) => state.upgrades[upgrade.id],
+      )
     default:
       return false
   }
