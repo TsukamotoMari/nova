@@ -2,7 +2,7 @@ import { SAVE_KEY } from './data'
 import {
   createNewGame,
   isValidContract,
-  rollContract,
+  migrateContract,
   type GameState,
 } from './engine'
 import SaveVault, { vaultAvailable } from '../plugins/saveVault'
@@ -21,9 +21,10 @@ export function parseSave(raw: string): GameState | null {
       combo: typeof parsed.combo === 'number' ? parsed.combo : 0,
       lastComboAt: typeof parsed.lastComboAt === 'number' ? parsed.lastComboAt : 0,
       contractsDone: typeof parsed.contractsDone === 'number' ? parsed.contractsDone : 0,
-      contract: isValidContract(parsed.contract)
-        ? parsed.contract
-        : rollContract(parsed.warps ?? 0, parsed.lifetimeEarned ?? 0),
+      contract: migrateContract(
+        parsed.warps ?? 0,
+        isValidContract(parsed.contract) ? parsed.contract : null,
+      ),
     }
   } catch {
     return null

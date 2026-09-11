@@ -9,6 +9,8 @@ import {
   generatorById,
   milestoneMultiplier,
   perkById,
+  PRESTIGE_DIVISOR,
+  coresNeededForGain,
   prestigeGain,
   sectorForWarps,
   upgradeById,
@@ -73,38 +75,31 @@ export function createNewGame(now = Date.now()): GameState {
     lastTick: now,
     combo: 0,
     lastComboAt: 0,
-    contract: rollContract(0, 0),
+    contract: rollContract(0),
     contractsDone: 0,
   }
 }
 
-export function rollContract(warps: number, lifetimeEarned: number): ContractState {
-  const sector = sectorForWarps(warps)
-  const scale = Math.max(1, Math.floor(Math.sqrt(Math.max(lifetimeEarned, 1) / 5000)))
-  const slot = warps % 3
-  if (slot === 0) {
-    return {
-      kind: 'ore',
-      target: Math.round(400 * scale * (1 + warps * 0.15)),
-      reward: Math.round(140 * scale * (1 + warps * 0.1)),
-      completed: false,
-    }
-  }
-  if (slot === 1) {
-    return {
-      kind: 'rigs',
-      generatorId: sector.favored[0],
-      target: Math.min(25, 5 + Math.floor(warps / 2)),
-      reward: Math.round(220 * scale * (1 + warps * 0.1)),
-      completed: false,
-    }
-  }
+export function warpOreTarget(warps: number): number {
+  return coresNeededForGain(warps + 1)
+}
+
+export function rollContract(warps: number): ContractState {
+  const target = warpOreTarget(warps)
   return {
-    kind: 'clicks',
-    target: Math.round(36 + 18 * scale + warps * 8),
-    reward: Math.round(100 * scale * (1 + warps * 0.1)),
+    kind: 'ore',
+    target,
+    reward: Math.max(1, Math.round((target * 140) / PRESTIGE_DIVISOR)),
     completed: false,
   }
+}
+
+export function migrateContract(warps: number, contract: ContractState | null): ContractState {
+  const fresh = rollContract(warps)
+  if (!contract) return fresh
+  if (contract.completed) return contract
+  if (contract.kind !== 'ore' || contract.target < fresh.target) return fresh
+  return contract
 }
 
 export function isValidContract(value: unknown): value is ContractState {
@@ -147,7 +142,10 @@ export function contractProgress(state: GameState): number {
 
 export function contractCopy(contract: ContractState): { title: string; detail: string } {
   if (contract.kind === 'ore') {
-    return { title: 'Fill the hold', detail: `Mine ${contract.target} ore this shift.` }
+    return {
+      title: 'Fill the hold',
+      detail: `Mine ${contract.target} ore this shift — the warp quota for this claim.`,
+    }
   }
   if (contract.kind === 'clicks') {
     return { title: 'Work the rock', detail: `Land ${contract.target} strikes this shift.` }
@@ -445,7 +443,7 @@ export function warp(state: GameState, now = Date.now()): GameState {
     warps: state.warps + 1,
     combo: 0,
     lastComboAt: 0,
-    contract: rollContract(state.warps + 1, state.lifetimeEarned),
+    contract: rollContract(state.warps + 1),
     lastTick: now,
   }
 }

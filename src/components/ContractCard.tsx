@@ -18,7 +18,7 @@ export function ContractCard({ state }: { state: GameState }) {
       <strong>{copy.title}</strong>
       <p>
         {contract.kind === 'ore'
-          ? `Mine ${formatNumber(contract.target)} ore this shift.`
+          ? `Mine ${formatNumber(contract.target)} ore this shift — the warp quota for this claim.`
           : contract.kind === 'clicks'
             ? `Land ${formatNumber(contract.target, 0)} strikes this shift.`
             : copy.detail}
