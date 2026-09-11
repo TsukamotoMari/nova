@@ -1,3 +1,5 @@
+import { App } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { play } from '../game/audio'
 import { ACHIEVEMENTS } from '../game/data'
@@ -30,6 +32,11 @@ export interface OfflineReport {
   elapsed: number
   earned: number
 }
+
+const TICK_MS = 250
+const UI_MS = 100
+const SAVE_SEC = 2
+const CATCHUP_SEC = 30
 
 export function useGame() {
   const stateRef = useRef<GameState>(createNewGame())
@@ -84,11 +91,16 @@ export function useGame() {
 
   useEffect(() => {
     let cancelled = false
-    let frame = 0
-    let last = performance.now()
-    let uiAcc = 0
+    let timer: ReturnType<typeof setInterval> | null = null
     let saveAcc = 0
+    let uiAcc = 0
     let started = false
+    let paused = false
+
+    const persist = () => {
+      if (!started) return
+      writeSave(stateRef.current)
+    }
 
     const creditAway = () => {
       const offlineResult = applyOffline(stateRef.current)
@@ -99,28 +111,49 @@ export function useGame() {
       writeSave(offlineResult.state)
     }
 
-    const loop = (now: number) => {
-      if (cancelled || document.visibilityState === 'hidden') return
-      const dt = Math.min((now - last) / 1000, 1)
-      last = now
-      stateRef.current = tick(stateRef.current, dt)
-      uiAcc += dt
+    const step = () => {
+      if (cancelled || paused) return
+      const now = Date.now()
+      const elapsed = (now - stateRef.current.lastTick) / 1000
+      if (elapsed <= 0) return
+      const dt = Math.min(elapsed, CATCHUP_SEC)
+      stateRef.current = tick(stateRef.current, dt, now)
       saveAcc += dt
-      if (uiAcc >= 0.1) {
+      uiAcc += dt
+      if (uiAcc >= UI_MS / 1000) {
         uiAcc = 0
         publish(stateRef.current)
       }
-      if (saveAcc >= 2) {
+      if (saveAcc >= SAVE_SEC) {
         saveAcc = 0
         writeSave(stateRef.current)
       }
-      frame = requestAnimationFrame(loop)
+    }
+
+    const stopLoop = () => {
+      if (timer) clearInterval(timer)
+      timer = null
     }
 
     const startLoop = () => {
-      last = performance.now()
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(loop)
+      stopLoop()
+      timer = setInterval(step, TICK_MS)
+      step()
+    }
+
+    const pause = () => {
+      if (paused) return
+      paused = true
+      stopLoop()
+      persist()
+    }
+
+    const resume = () => {
+      if (cancelled || !started) return
+      if (document.visibilityState === 'hidden') return
+      paused = false
+      creditAway()
+      startLoop()
     }
 
     const begin = (base: GameState) => {
@@ -129,11 +162,6 @@ export function useGame() {
       stateRef.current = base
       creditAway()
       startLoop()
-    }
-
-    const persist = () => {
-      if (!started) return
-      writeSave(stateRef.current)
     }
 
     const boot = async () => {
@@ -159,7 +187,7 @@ export function useGame() {
     const onVisible = () => {
       if (cancelled) return
       if (document.visibilityState === 'hidden') {
-        persist()
+        pause()
         return
       }
       if (!started) {
@@ -169,20 +197,33 @@ export function useGame() {
         })
         return
       }
-      creditAway()
-      startLoop()
+      resume()
+    }
+
+    const onFocus = () => {
+      if (cancelled || !started) return
+      resume()
     }
 
     window.addEventListener('beforeunload', persist)
     window.addEventListener('pagehide', persist)
+    window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisible)
+
+    const appListeners: Array<{ remove: () => void }> = []
+    if (Capacitor.isNativePlatform()) {
+      void App.addListener('pause', () => pause()).then((handle) => appListeners.push(handle))
+      void App.addListener('resume', () => resume()).then((handle) => appListeners.push(handle))
+    }
 
     return () => {
       cancelled = true
-      cancelAnimationFrame(frame)
+      stopLoop()
       persist()
+      for (const handle of appListeners) handle.remove()
       window.removeEventListener('beforeunload', persist)
       window.removeEventListener('pagehide', persist)
+      window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [publish])
