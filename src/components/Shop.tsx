@@ -5,8 +5,10 @@ import {
   CORE_PERKS,
   GENERATORS,
   UPGRADES,
+  generatorById,
   nextMilestone,
   prestigeGain,
+  sectorForWarps,
   type CorePerkDef,
   type UpgradeDef,
 } from '../game/data'
@@ -21,6 +23,7 @@ import {
   gearUpgradeReady,
   generatorRate,
   generatorVisible,
+  isFavored,
   maxBuyCount,
   perkCost,
   perkRank,
@@ -108,15 +111,19 @@ export function Shop({
               const displayCost = buyCost(gen.baseCost, owned, Math.max(displayCount, 1))
               const rate = generatorRate(state, gen.id)
               const next = nextMilestone(owned)
+              const favored = isFavored(state, gen.id)
 
               return (
-                <li key={gen.id} className={`rig ${affordable ? 'is-ready' : ''}`}>
+                <li key={gen.id} className={`rig ${affordable ? 'is-ready' : ''} ${favored ? 'is-favored' : ''}`}>
                   <span className="rig-icon" aria-hidden="true">
                     {gen.icon}
                   </span>
                   <div className="rig-body">
                     <div className="rig-head">
-                      <strong>{gen.name}</strong>
+                      <strong>
+                        {gen.name}
+                        {favored ? <span className="favored-tag">this claim</span> : null}
+                      </strong>
                       <span className="rig-owned">{owned}</span>
                     </div>
                     <p>{gen.flavor}</p>
@@ -146,7 +153,10 @@ export function Shop({
           <div className="click-panel">
             <p className="warp-kicker">Manual mining</p>
             <h2>Strike power {formatNumber(clickPower(state))}</h2>
-            <p>Temper the pick for more ore per hit, then install tools that multiply every strike.</p>
+            <p>
+              Temper the pick for more ore per hit, then install tools that multiply every strike.
+              Chain hits within a beat for a combo. Crits kick off aftershocks.
+            </p>
           </div>
           <BuyModes buyMode={buyMode} onBuyMode={onBuyMode} />
           <ul className="upgrade-list">
@@ -187,6 +197,11 @@ export function Shop({
         <div className="warp-panel">
           <p className="warp-kicker">Sector jump</p>
           <h2>Warp to a richer claim</h2>
+          <p>
+            You are in <strong>{sectorForWarps(state.warps).name}</strong>. The next jump is{' '}
+            <strong>{sectorForWarps(state.warps + 1).name}</strong> — {sectorForWarps(state.warps + 1).flavor}{' '}
+            Favored there: {sectorForWarps(state.warps + 1).favored.map((id) => generatorById(id).name).join(', ')}.
+          </p>
           <p>
             Collapse this operation and keep your <strong>core fragments</strong>. Unspent cores
             still boost all mining by 10% each. Spend them below on upgrades that survive every warp.
@@ -275,6 +290,14 @@ export function Shop({
             <div>
               <dt>Warps</dt>
               <dd>{formatNumber(state.warps, 0)}</dd>
+            </div>
+            <div>
+              <dt>Sector</dt>
+              <dd>{sectorForWarps(state.warps).name}</dd>
+            </div>
+            <div>
+              <dt>Contracts</dt>
+              <dd>{formatNumber(state.contractsDone ?? 0, 0)}</dd>
             </div>
             <div>
               <dt>Cores found</dt>

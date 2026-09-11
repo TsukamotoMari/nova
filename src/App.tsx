@@ -1,6 +1,10 @@
+import { useState } from 'react'
+import { ContractCard } from './components/ContractCard'
 import { MineButton } from './components/MineButton'
 import { Shop } from './components/Shop'
-import { clickPower, coreMultiplier } from './game/engine'
+import { isMuted, toggleMute } from './game/audio'
+import { sectorForWarps } from './game/data'
+import { asteroidWear, clickPower, coreMultiplier, currentCombo } from './game/engine'
 import { formatDuration, formatNumber, formatRate } from './game/numbers'
 import { useAppUpdate } from './hooks/useAppUpdate'
 import { useGame } from './hooks/useGame'
@@ -11,6 +15,8 @@ export default function App() {
   const game = useGame()
   const appUpdate = useAppUpdate()
   const cores = game.state.cores
+  const sector = sectorForWarps(game.state.warps)
+  const [muted, setMuted] = useState(() => isMuted())
 
   return (
     <div className="app">
@@ -18,6 +24,15 @@ export default function App() {
         <img src={nebula} alt="" />
       </div>
       <div className="vignette" aria-hidden="true" />
+
+      <button
+        type="button"
+        className="mute-link"
+        onClick={() => setMuted(toggleMute())}
+        aria-label={muted ? 'Unmute sound' : 'Mute sound'}
+      >
+        {muted ? 'sfx off' : 'sfx'}
+      </button>
 
       <button
         type="button"
@@ -48,7 +63,7 @@ export default function App() {
 
       <header className="hud">
         <div className="brand">
-          <p className="kicker">Cosmic mining incremental</p>
+          <p className="kicker">{sector.kicker}</p>
           <h1>NOVA</h1>
           <p className="build">
             v{appUpdate.localVersion} · {appUpdate.localVersionCode}
@@ -72,7 +87,17 @@ export default function App() {
       </header>
 
       <main className="layout">
-        <MineButton onStrike={game.strike} strikePower={clickPower(game.state)} />
+        <div className="claim-col">
+          <MineButton
+            onStrike={game.strike}
+            strikePower={clickPower(game.state)}
+            combo={currentCombo(game.state)}
+            wear={asteroidWear(game.state)}
+            hue={sector.hue}
+            glow={sector.glow}
+          />
+          <ContractCard state={game.state} />
+        </div>
         <Shop
           state={game.state}
           buyMode={game.buyMode}

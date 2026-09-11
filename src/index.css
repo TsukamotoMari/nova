@@ -107,15 +107,16 @@ p {
 .toasts,
 .modal,
 .update-banner,
-.site-link {
+.site-link,
+.mute-link {
   position: relative;
   z-index: 1;
 }
 
+.mute-link,
 .site-link {
   position: absolute;
   top: max(10px, env(safe-area-inset-top, 0px));
-  right: max(10px, env(safe-area-inset-right, 0px));
   z-index: 2;
   padding: 6px 10px;
   border: 1px solid rgba(220, 227, 240, 0.18);
@@ -128,6 +129,16 @@ p {
   text-transform: uppercase;
 }
 
+.mute-link {
+  left: max(10px, env(safe-area-inset-left, 0px));
+}
+
+.site-link {
+  right: max(10px, env(safe-area-inset-right, 0px));
+}
+
+.mute-link:hover,
+.mute-link:focus-visible,
 .site-link:hover,
 .site-link:focus-visible {
   color: var(--text);
@@ -263,6 +274,11 @@ p {
   align-items: start;
 }
 
+.claim-col {
+  display: grid;
+  gap: 16px;
+}
+
 .mine-stage {
   position: relative;
   display: grid;
@@ -293,8 +309,10 @@ p {
   -webkit-user-select: none;
 }
 
+.asteroid-tint,
 .asteroid-art,
-.asteroid-ring {
+.asteroid-ring,
+.asteroid-wear {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -317,9 +335,84 @@ p {
   animation: spin 18s linear infinite;
 }
 
+.asteroid-wear {
+  overflow: visible;
+}
+
+.asteroid-wear path {
+  fill: none;
+  stroke: rgba(255, 230, 180, 0.85);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px rgba(255, 176, 32, 0.7));
+}
+
+.combo-pip {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(8, 16, 24, 0.72);
+  border: 1px solid rgba(62, 224, 198, 0.45);
+  color: var(--plasma);
+  font-family: var(--display);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+
 .asteroid.is-struck .asteroid-art {
   transform: scale(0.94) rotate(-2deg);
   filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.4)) brightness(1.18);
+}
+
+.contract-card {
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(62, 224, 198, 0.1), rgba(18, 21, 30, 0.82));
+  border: 1px solid rgba(62, 224, 198, 0.28);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.contract-card strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.contract-card p {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.contract-card span {
+  display: block;
+  margin-top: 8px;
+  color: var(--ore);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.contract-card.is-done {
+  border-color: rgba(255, 176, 32, 0.35);
+  background: linear-gradient(180deg, rgba(255, 176, 32, 0.1), rgba(18, 21, 30, 0.82));
+}
+
+.contract-bar {
+  margin-top: 10px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(8, 12, 20, 0.7);
+  overflow: hidden;
+}
+
+.contract-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--plasma), var(--ore));
 }
 
 .ore-chip {
@@ -485,6 +578,28 @@ p {
   display: flex;
   justify-content: space-between;
   gap: 8px;
+}
+
+.rig-head strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.rig.is-favored {
+  border-color: rgba(62, 224, 198, 0.28);
+}
+
+.favored-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(62, 224, 198, 0.15);
+  color: var(--plasma);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
 }
 
 .rig-owned {

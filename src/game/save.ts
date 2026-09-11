@@ -1,5 +1,10 @@
 import { SAVE_KEY } from './data'
-import { createNewGame, type GameState } from './engine'
+import {
+  createNewGame,
+  isValidContract,
+  rollContract,
+  type GameState,
+} from './engine'
 import SaveVault, { vaultAvailable } from '../plugins/saveVault'
 
 export function parseSave(raw: string): GameState | null {
@@ -13,6 +18,12 @@ export function parseSave(raw: string): GameState | null {
       upgrades: { ...fresh.upgrades, ...parsed.upgrades },
       corePerks: { ...fresh.corePerks, ...parsed.corePerks },
       achievements: parsed.achievements ?? [],
+      combo: typeof parsed.combo === 'number' ? parsed.combo : 0,
+      lastComboAt: typeof parsed.lastComboAt === 'number' ? parsed.lastComboAt : 0,
+      contractsDone: typeof parsed.contractsDone === 'number' ? parsed.contractsDone : 0,
+      contract: isValidContract(parsed.contract)
+        ? parsed.contract
+        : rollContract(parsed.warps ?? 0, parsed.lifetimeEarned ?? 0),
     }
   } catch {
     return null

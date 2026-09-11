@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { play } from '../game/audio'
 import { ACHIEVEMENTS } from '../game/data'
 import {
+  applyContract,
   applyOffline,
   collectAchievements,
   createNewGame,
@@ -15,6 +17,7 @@ import {
   type BuyMode,
   type GameState,
 } from '../game/engine'
+import { formatNumber } from '../game/numbers'
 import { clearSave, loadDurableSave, loadSave, prepareDurableRestore, writeSave } from '../game/save'
 
 export interface Toast {
@@ -38,25 +41,40 @@ export function useGame() {
   const toastId = useRef(0)
 
   const publish = useCallback((next: GameState) => {
-    const collected = collectAchievements(next)
+    const applied = applyContract(next)
+    const collected = collectAchievements(applied.state)
     stateRef.current = collected.state
     setState(collected.state)
-    if (collected.unlocked.length > 0) {
-      const extra = collected.unlocked.map((id) => {
-        const def = ACHIEVEMENTS.find((a) => a.id === id)
-        toastId.current += 1
-        return {
-          id: toastId.current,
-          title: def?.name ?? 'Claim logged',
-          flavor: def?.flavor ?? '',
-        }
+
+    const extra: Toast[] = []
+    if (applied.justCompleted && applied.state.contract) {
+      toastId.current += 1
+      extra.push({
+        id: toastId.current,
+        title: 'Contract paid',
+        flavor: `+${formatNumber(applied.state.contract.reward)} ore hits the hold.`,
       })
-      setToasts((prev) => [...prev, ...extra].slice(-4))
-      for (const toast of extra) {
-        window.setTimeout(() => {
-          setToasts((prev) => prev.filter((item) => item.id !== toast.id))
-        }, 4200)
-      }
+      play('contract')
+    }
+    if (collected.unlocked.length > 0) {
+      extra.push(
+        ...collected.unlocked.map((id) => {
+          const def = ACHIEVEMENTS.find((a) => a.id === id)
+          toastId.current += 1
+          return {
+            id: toastId.current,
+            title: def?.name ?? 'Claim logged',
+            flavor: def?.flavor ?? '',
+          }
+        }),
+      )
+    }
+    if (extra.length === 0) return
+    setToasts((prev) => [...prev, ...extra].slice(-4))
+    for (const toast of extra) {
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((item) => item.id !== toast.id))
+      }, 4200)
     }
   }, [])
 
@@ -169,36 +187,55 @@ export function useGame() {
     }
   }, [publish])
 
-  const strike = useCallback(() => {
-    const result = mine(stateRef.current)
-    publish(result.state)
-    return result
-  }, [publish])
+  const strike = useCallback(
+    (opts?: { auto?: boolean }) => {
+      const result = mine(stateRef.current, opts)
+      if (!opts?.auto) play(result.crit ? 'crit' : 'strike')
+      publish(result.state)
+      return result
+    },
+    [publish],
+  )
 
   const buyGenerator = useCallback(
     (id: string) => {
-      publish(purchaseGenerator(stateRef.current, id, buyModeRef.current))
+      const before = stateRef.current
+      const next = purchaseGenerator(before, id, buyModeRef.current)
+      if (next !== before) play('buy')
+      publish(next)
     },
     [publish],
   )
 
   const buyUpgrade = useCallback(
     (id: string) => {
-      publish(purchaseUpgrade(stateRef.current, id))
+      const before = stateRef.current
+      const next = purchaseUpgrade(before, id)
+      if (next !== before) play('buy')
+      publish(next)
     },
     [publish],
   )
 
   const buyClickRanks = useCallback(() => {
-    publish(purchaseClickRanks(stateRef.current, buyModeRef.current))
+    const before = stateRef.current
+    const next = purchaseClickRanks(before, buyModeRef.current)
+    if (next !== before) play('buy')
+    publish(next)
   }, [publish])
 
   const buyCorePerk = useCallback((id: string) => {
-    publish(purchaseCorePerk(stateRef.current, id))
+    const before = stateRef.current
+    const next = purchaseCorePerk(before, id)
+    if (next !== before) play('buy')
+    publish(next)
   }, [publish])
 
   const doWarp = useCallback(() => {
-    publish(warp(stateRef.current))
+    const before = stateRef.current
+    const next = warp(before)
+    if (next !== before) play('warp')
+    publish(next)
   }, [publish])
 
   const hardReset = useCallback(() => {

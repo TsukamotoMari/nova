@@ -10,8 +10,23 @@ import {
   milestoneMultiplier,
   perkById,
   prestigeGain,
+  sectorForWarps,
   upgradeById,
 } from './data'
+
+export const COMBO_WINDOW = 1400
+export const COMBO_CAP = 12
+export const COMBO_BONUS = 0.08
+
+export type ContractKind = 'ore' | 'clicks' | 'rigs'
+
+export interface ContractState {
+  kind: ContractKind
+  target: number
+  generatorId?: string
+  reward: number
+  completed: boolean
+}
 
 export interface GameState {
   ore: number
@@ -29,6 +44,10 @@ export interface GameState {
   achievements: string[]
   startedAt: number
   lastTick: number
+  combo: number
+  lastComboAt: number
+  contract: ContractState
+  contractsDone: number
 }
 
 export function emptyGenerators(): Record<string, number> {
@@ -52,6 +71,108 @@ export function createNewGame(now = Date.now()): GameState {
     achievements: [],
     startedAt: now,
     lastTick: now,
+    combo: 0,
+    lastComboAt: 0,
+    contract: rollContract(0, 0),
+    contractsDone: 0,
+  }
+}
+
+export function rollContract(warps: number, lifetimeEarned: number): ContractState {
+  const sector = sectorForWarps(warps)
+  const scale = Math.max(1, Math.floor(Math.sqrt(Math.max(lifetimeEarned, 1) / 5000)))
+  const slot = warps % 3
+  if (slot === 0) {
+    return {
+      kind: 'ore',
+      target: Math.round(400 * scale * (1 + warps * 0.15)),
+      reward: Math.round(140 * scale * (1 + warps * 0.1)),
+      completed: false,
+    }
+  }
+  if (slot === 1) {
+    return {
+      kind: 'rigs',
+      generatorId: sector.favored[0],
+      target: Math.min(25, 5 + Math.floor(warps / 2)),
+      reward: Math.round(220 * scale * (1 + warps * 0.1)),
+      completed: false,
+    }
+  }
+  return {
+    kind: 'clicks',
+    target: Math.round(36 + 18 * scale + warps * 8),
+    reward: Math.round(100 * scale * (1 + warps * 0.1)),
+    completed: false,
+  }
+}
+
+export function isValidContract(value: unknown): value is ContractState {
+  if (!value || typeof value !== 'object') return false
+  const contract = value as ContractState
+  return (
+    (contract.kind === 'ore' || contract.kind === 'clicks' || contract.kind === 'rigs') &&
+    typeof contract.target === 'number' &&
+    typeof contract.reward === 'number'
+  )
+}
+
+export function currentCombo(state: GameState, now = Date.now()): number {
+  if (!state.lastComboAt || now - state.lastComboAt > COMBO_WINDOW) return 0
+  return state.combo ?? 0
+}
+
+export function comboMultiplier(state: GameState, now = Date.now()): number {
+  return 1 + currentCombo(state, now) * COMBO_BONUS
+}
+
+export function isFavored(state: GameState, id: string): boolean {
+  return sectorForWarps(state.warps).favored.includes(id)
+}
+
+export function asteroidWear(state: GameState): number {
+  return Math.min(1, (state.clicks ?? 0) / 80 + state.runEarned / 50_000)
+}
+
+export function contractProgress(state: GameState): number {
+  const contract = state.contract
+  if (!contract) return 0
+  if (contract.kind === 'ore') return state.runEarned
+  if (contract.kind === 'clicks') return state.clicks
+  if (contract.kind === 'rigs' && contract.generatorId) {
+    return state.generators[contract.generatorId] ?? 0
+  }
+  return 0
+}
+
+export function contractCopy(contract: ContractState): { title: string; detail: string } {
+  if (contract.kind === 'ore') {
+    return { title: 'Fill the hold', detail: `Mine ${contract.target} ore this shift.` }
+  }
+  if (contract.kind === 'clicks') {
+    return { title: 'Work the rock', detail: `Land ${contract.target} strikes this shift.` }
+  }
+  const gen = contract.generatorId ? generatorById(contract.generatorId) : null
+  return {
+    title: 'Staff the claim',
+    detail: `Own ${contract.target} ${gen?.name ?? 'rigs'}.`,
+  }
+}
+
+export function applyContract(state: GameState): { state: GameState; justCompleted: boolean } {
+  const contract = state.contract
+  if (!contract || contract.completed) return { state, justCompleted: false }
+  if (contractProgress(state) < contract.target) return { state, justCompleted: false }
+  return {
+    state: addOre(
+      {
+        ...state,
+        contract: { ...contract, completed: true },
+        contractsDone: (state.contractsDone ?? 0) + 1,
+      },
+      contract.reward,
+    ),
+    justCompleted: true,
   }
 }
 
@@ -104,14 +225,14 @@ export function offlineCap(state: GameState): number {
   return OFFLINE_CAP_SECONDS + perkRank(state, 'core-offline') * 4 * 3600
 }
 
-export function clickPower(state: GameState): number {
+export function clickPower(state: GameState, now = Date.now()): number {
   let power = 1 + (state.clickRanks ?? 0)
   for (const upgrade of UPGRADES) {
     if (upgrade.kind === 'click' && state.upgrades[upgrade.id]) {
       power *= upgrade.multiplier
     }
   }
-  return power * coreMultiplier(state) * clickPerkMultiplier(state)
+  return power * coreMultiplier(state) * clickPerkMultiplier(state) * comboMultiplier(state, now)
 }
 
 export function coreMultiplier(state: GameState): number {
@@ -123,6 +244,7 @@ export function generatorRate(state: GameState, id: string): number {
   const owned = state.generators[id] ?? 0
   if (owned <= 0) return 0
   let mult = milestoneMultiplier(owned) * coreMultiplier(state) * prodPerkMultiplier(state)
+  if (isFavored(state, id)) mult *= 1.25
   for (const upgrade of UPGRADES) {
     if (!state.upgrades[upgrade.id]) continue
     if (upgrade.kind === 'global') mult *= upgrade.multiplier
@@ -171,14 +293,23 @@ export interface ClickResult {
   crit: boolean
 }
 
-export function mine(state: GameState): ClickResult {
-  const crit = Math.random() < critChance(state)
-  const gained = clickPower(state) * (crit ? 7 : 1)
+export function mine(state: GameState, opts?: { auto?: boolean; now?: number }): ClickResult {
+  const now = opts?.now ?? Date.now()
+  const auto = Boolean(opts?.auto)
+  const liveCombo = currentCombo(state, now)
+  const combo = auto ? liveCombo : Math.min(COMBO_CAP, liveCombo + 1)
+  const next: GameState = {
+    ...state,
+    combo,
+    lastComboAt: auto ? (state.lastComboAt ?? 0) : now,
+  }
+  const crit = !auto && Math.random() < critChance(next)
+  const gained = clickPower(next, now) * (crit ? 7 : 1)
   return {
     state: {
-      ...addOre(state, gained),
-      clicks: state.clicks + 1,
-      lifetimeClicks: state.lifetimeClicks + 1,
+      ...addOre(next, gained),
+      clicks: next.clicks + 1,
+      lifetimeClicks: next.lifetimeClicks + 1,
     },
     gained,
     crit,
@@ -312,6 +443,9 @@ export function warp(state: GameState, now = Date.now()): GameState {
     cores: state.cores + gain,
     lifetimeCores: state.lifetimeCores + gain,
     warps: state.warps + 1,
+    combo: 0,
+    lastComboAt: 0,
+    contract: rollContract(state.warps + 1, state.lifetimeEarned),
     lastTick: now,
   }
 }
@@ -352,6 +486,12 @@ export function achievementUnlocked(state: GameState, id: string): boolean {
       return UPGRADES.filter((upgrade) => upgrade.kind === 'click').every(
         (upgrade) => state.upgrades[upgrade.id],
       )
+    case 'first-contract':
+      return (state.contractsDone ?? 0) >= 1 || Boolean(state.contract?.completed)
+    case 'sector-hop':
+      return state.warps >= 2
+    case 'hot-hands':
+      return (state.combo ?? 0) >= 8
     default:
       return false
   }
@@ -374,6 +514,10 @@ export function generatorVisible(state: GameState, index: number): boolean {
   if (index === 0) return true
   const previous = GENERATORS[index - 1]
   const ownedPrev = state.generators[previous.id] ?? 0
-  const thisCost = GENERATORS[index].baseCost
-  return ownedPrev > 0 || state.ore >= thisCost * 0.5 || state.runEarned >= thisCost * 0.4
+  const gen = GENERATORS[index]
+  const thisCost = gen.baseCost
+  const favored = isFavored(state, gen.id)
+  const oreNeed = favored ? 0.25 : 0.5
+  const earnedNeed = favored ? 0.3 : 0.4
+  return ownedPrev > 0 || state.ore >= thisCost * oreNeed || state.runEarned >= thisCost * earnedNeed
 }

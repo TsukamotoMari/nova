@@ -30,6 +30,16 @@ export interface AchievementDef {
   flavor: string
 }
 
+export interface SectorDef {
+  id: string
+  name: string
+  kicker: string
+  flavor: string
+  hue: number
+  glow: string
+  favored: string[]
+}
+
 export const GENERATORS: GeneratorDef[] = [
   {
     id: 'drone',
@@ -595,7 +605,90 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'nebula', name: 'Dust into Iron', flavor: 'Spin up a nebula loom.' },
   { id: 'foundry', name: 'Whole Sky', flavor: 'Light a cosmic foundry.' },
   { id: 'click-kit', name: 'Full Kit', flavor: 'Install every strike tool in one shift.' },
+  { id: 'first-contract', name: 'Signed Claim', flavor: 'Finish a contract this shift.' },
+  { id: 'sector-hop', name: 'Belt Hopper', flavor: 'Warp into a second sector.' },
+  { id: 'hot-hands', name: 'Hot Hands', flavor: 'String together an 8-hit combo.' },
 ]
+
+export const SECTORS: SectorDef[] = [
+  {
+    id: 'ice-belt',
+    name: 'Ice Belt',
+    kicker: 'Ice Belt claim',
+    flavor: 'Frozen rubble and easy drone work. Light rigs run hot here.',
+    hue: 190,
+    glow: 'rgba(120, 200, 255, 0.34)',
+    favored: ['drone', 'extractor'],
+  },
+  {
+    id: 'iron-wake',
+    name: 'Iron Wake',
+    kicker: 'Iron Wake claim',
+    flavor: 'A convoy graveyard. Tugs and nets eat well.',
+    hue: 12,
+    glow: 'rgba(255, 150, 70, 0.34)',
+    favored: ['tug', 'belt'],
+  },
+  {
+    id: 'basalt-shoals',
+    name: 'Basalt Shoals',
+    kicker: 'Basalt Shoals claim',
+    flavor: 'Black glass shelves. Crushers and siphons drink deep.',
+    hue: 32,
+    glow: 'rgba(255, 110, 70, 0.32)',
+    favored: ['crusher', 'siphon'],
+  },
+  {
+    id: 'corona-reach',
+    name: 'Corona Reach',
+    kicker: 'Corona Reach claim',
+    flavor: 'You work the skin of a living star.',
+    hue: 48,
+    glow: 'rgba(255, 210, 80, 0.36)',
+    favored: ['siphon', 'dyson'],
+  },
+  {
+    id: 'spiral-cut',
+    name: 'Spiral Cut',
+    kicker: 'Spiral Cut claim',
+    flavor: 'A quarry carved into a galaxy arm.',
+    hue: 265,
+    glow: 'rgba(170, 130, 255, 0.34)',
+    favored: ['quarry', 'dyson'],
+  },
+  {
+    id: 'void-rim',
+    name: 'Void Rim',
+    kicker: 'Void Rim claim',
+    flavor: 'The dark has an edge. Bores and looms like it.',
+    hue: 220,
+    glow: 'rgba(90, 160, 255, 0.34)',
+    favored: ['bore', 'nebula'],
+  },
+  {
+    id: 'loom-dark',
+    name: 'Loom Dark',
+    kicker: 'Loom Dark claim',
+    flavor: 'Dust thick enough to weave. Mills keep time.',
+    hue: 300,
+    glow: 'rgba(220, 120, 255, 0.32)',
+    favored: ['nebula', 'pulsar'],
+  },
+  {
+    id: 'foundry-sky',
+    name: 'Foundry Sky',
+    kicker: 'Foundry Sky claim',
+    flavor: 'The whole vault is a furnace. Late rigs finally sing.',
+    hue: 8,
+    glow: 'rgba(255, 90, 50, 0.36)',
+    favored: ['foundry', 'pulsar'],
+  },
+]
+
+export function sectorForWarps(warps: number): SectorDef {
+  const index = ((warps % SECTORS.length) + SECTORS.length) % SECTORS.length
+  return SECTORS[index]
+}
 
 export const MILESTONES = [10, 25, 50, 100, 200, 300, 400, 500]
 

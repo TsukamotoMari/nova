@@ -1,12 +1,18 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatNumber } from '../game/numbers'
 import { AsteroidArt } from './AsteroidArt'
 
 const TAP_SLOP = 16
+const AFTERSHOCKS = 5
+const AFTERSHOCK_GAP = 120
 
 interface MineButtonProps {
-  onStrike: () => { gained: number; crit: boolean }
+  onStrike: (opts?: { auto?: boolean }) => { gained: number; crit: boolean }
   strikePower: number
+  combo: number
+  wear: number
+  hue: number
+  glow: string
 }
 
 interface Chip {
@@ -26,23 +32,26 @@ interface PointerTrack {
 
 let chipSeq = 0
 
-export function MineButton({ onStrike, strikePower }: MineButtonProps) {
+export function MineButton({ onStrike, strikePower, combo, wear, hue, glow }: MineButtonProps) {
   const [struck, setStruck] = useState(false)
   const [chips, setChips] = useState<Chip[]>([])
   const pointers = useRef(new Map<number, PointerTrack>())
+  const aftershock = useRef<number[]>([])
+  const buttonRef = useRef<HTMLButtonElement>(null)
 
-  function strikeAt(target: HTMLButtonElement, clientX: number, clientY: number) {
-    const result = onStrike()
-    setStruck(false)
-    requestAnimationFrame(() => setStruck(true))
-    window.setTimeout(() => setStruck(false), 140)
+  useEffect(() => {
+    return () => {
+      for (const id of aftershock.current) window.clearTimeout(id)
+    }
+  }, [])
 
+  function spawnChip(target: HTMLButtonElement, clientX: number, clientY: number, gained: number, crit: boolean) {
     const rect = target.getBoundingClientRect()
     chipSeq += 1
     const chip: Chip = {
       id: chipSeq,
-      label: `+${formatChip(result.gained)}`,
-      crit: result.crit,
+      label: `+${formatChip(gained)}`,
+      crit,
       x: ((clientX - rect.left) / rect.width) * 100,
       y: ((clientY - rect.top) / rect.height) * 100,
     }
@@ -50,6 +59,34 @@ export function MineButton({ onStrike, strikePower }: MineButtonProps) {
     window.setTimeout(() => {
       setChips((prev) => prev.filter((item) => item.id !== chip.id))
     }, 800)
+  }
+
+  function strikeAt(
+    target: HTMLButtonElement,
+    clientX: number,
+    clientY: number,
+    opts?: { auto?: boolean },
+  ) {
+    const result = onStrike(opts)
+    setStruck(false)
+    requestAnimationFrame(() => setStruck(true))
+    window.setTimeout(() => setStruck(false), 140)
+    spawnChip(target, clientX, clientY, result.gained, result.crit)
+
+    if (result.crit && !opts?.auto) {
+      for (const id of aftershock.current) window.clearTimeout(id)
+      aftershock.current = []
+      for (let i = 1; i <= AFTERSHOCKS; i += 1) {
+        const id = window.setTimeout(() => {
+          const btn = buttonRef.current
+          if (!btn) return
+          const jitterX = clientX + (Math.random() - 0.5) * 28
+          const jitterY = clientY + (Math.random() - 0.5) * 28
+          strikeAt(btn, jitterX, jitterY, { auto: true })
+        }, i * AFTERSHOCK_GAP)
+        aftershock.current.push(id)
+      }
+    }
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLButtonElement>) {
@@ -93,8 +130,9 @@ export function MineButton({ onStrike, strikePower }: MineButtonProps) {
 
   return (
     <div className="mine-stage">
-      <div className="mine-glow" />
+      <div className="mine-glow" style={{ background: `radial-gradient(circle, ${glow}, transparent 68%)` }} />
       <button
+        ref={buttonRef}
         type="button"
         className={`asteroid ${struck ? 'is-struck' : ''}`}
         onPointerDown={handlePointerDown}
@@ -104,8 +142,9 @@ export function MineButton({ onStrike, strikePower }: MineButtonProps) {
         onKeyDown={handleKeyDown}
         aria-label="Mine the asteroid"
       >
-        <AsteroidArt />
+        <AsteroidArt hue={hue} wear={wear} />
         <span className="asteroid-ring" />
+        {combo >= 2 ? <span className="combo-pip">×{combo}</span> : null}
         {chips.map((chip) => (
           <span
             key={chip.id}
